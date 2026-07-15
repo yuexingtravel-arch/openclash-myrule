@@ -1,0 +1,323 @@
+# ==========================================================
+# OpenClash 自定义规则配置（住宅IP / 机房IP 两组节点 + 全部节点）
+# 基于用户提供的 subconverter 方案 B 模板转换为 Clash Meta 标准 YAML
+# 生成日期：2026-07-15
+# ==========================================================
+
+mixed-port: 7890
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: info
+ipv6: false
+external-controller: 0.0.0.0:9090
+# secret: "在此填写你的 dashboard 密码"
+
+dns:
+  enable: true
+  ipv6: false
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+  fallback:
+    - https://1.1.1.1/dns-query
+    - https://8.8.8.8/dns-query
+  fake-ip-filter:
+    - "*.lan"
+    - "+.local"
+
+# ==========================================================
+# 1) 订阅（proxy-providers）
+#    - url 请替换为你自己的机场订阅地址
+#    - exclude-filter 沿用你模板里的"节点清洗"规则，
+#      剔除机场展示/说明/防失联/流量提示节点
+# ==========================================================
+proxy-providers:
+  main:
+    type: http
+    url: "在此填写你的订阅链接"
+    interval: 3600
+    path: ./proxy_providers/main.yaml
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 300
+    exclude-filter: "流量|套餐|到期|剩余|重置|官网|网站|最新网址|防失联|失联|官网地址|公告|通知|TG|Telegram|电报|群|频道|说明|使用说明|QQ群|客服|工单|订阅|Expire|Traffic|Reset|Remaining|Official|Website"
+
+# ==========================================================
+# 2) 规则集提供者（沿用 Aethersailor 补丁规则）
+# ==========================================================
+rule-providers:
+  aethersailor_direct_domain:
+    type: http
+    behavior: domain
+    format: yaml
+    url: "https://testingcf.jsdelivr.net/gh/Aethersailor/Custom_OpenClash_Rules@main/rule/Custom_Direct_Domain.yaml"
+    path: ./rule_providers/aethersailor_direct_domain.yaml
+    interval: 86400
+
+  aethersailor_direct_ip:
+    type: http
+    behavior: classical
+    format: yaml
+    url: "https://testingcf.jsdelivr.net/gh/Aethersailor/Custom_OpenClash_Rules@main/rule/Custom_Direct_Classical_IP.yaml"
+    path: ./rule_providers/aethersailor_direct_ip.yaml
+    interval: 86400
+
+  aethersailor_proxy_domain:
+    type: http
+    behavior: domain
+    format: yaml
+    url: "https://testingcf.jsdelivr.net/gh/Aethersailor/Custom_OpenClash_Rules@main/rule/Custom_Proxy_Domain.yaml"
+    path: ./rule_providers/aethersailor_proxy_domain.yaml
+    interval: 86400
+
+  aethersailor_proxy_ip:
+    type: http
+    behavior: classical
+    format: yaml
+    url: "https://testingcf.jsdelivr.net/gh/Aethersailor/Custom_OpenClash_Rules@main/rule/Custom_Proxy_Classical_IP.yaml"
+    path: ./rule_providers/aethersailor_proxy_ip.yaml
+    interval: 86400
+
+  aethersailor_port_direct:
+    type: http
+    behavior: classical
+    format: yaml
+    url: "https://testingcf.jsdelivr.net/gh/Aethersailor/Custom_OpenClash_Rules@main/rule/Custom_Port_Direct.yaml"
+    path: ./rule_providers/aethersailor_port_direct.yaml
+    interval: 86400
+
+# ==========================================================
+# 3) 策略组
+#    第一层：节点属性分组（住宅IP / 机房IP），及不做过滤的"全部节点"
+#    第二层：全节点手动选择 / 自动测速（兜底用）
+#    第三层：应用分组，全部引用上面的节点属性分组
+# ==========================================================
+proxy-groups:
+
+  # ---------- 3.1 节点属性分组（核心新增部分） ----------
+  # 关键词可按你的机场实际命名调整；未命中会导致分组为空
+  - name: 🏠 住宅IP
+    type: select
+    use: [main]
+    filter: "(?i)^SR"
+
+  - name: 🏢 机房IP
+    type: select
+    use: [main]
+    filter: "(?i)^(?!SR).*"
+
+  - name: 🌍 全部节点
+    type: select
+    use: [main]
+
+  # ---------- 3.2 全节点兜底分组 ----------
+  - name: 🧭 手动选择
+    type: select
+    use: [main]
+
+  - name: ♻️ 自动选择
+    type: url-test
+    use: [main]
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+
+  - name: 🚀 兜底选择
+    type: select
+    proxies: [♻️ 自动选择, 🏠 住宅IP, 🏢 机房IP, 🌍 全部节点, 🧭 手动选择, DIRECT]
+
+  # ---------- 3.3 应用分组（参照模板分类，节点来源改为三组属性节点） ----------
+  - name: 📦 Notion
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, DIRECT, 🌐 Default]
+
+  - name: 🍎 Apple
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, DIRECT, 🌐 Default]
+
+  - name: 🤖 ChatGPT
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🧠 AI
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 📨 Telegram
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 📞 即时通讯
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 💬 社交媒体
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🎬 YouTube
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🎥 Netflix
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🎵 TikTok
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 📸 Instagram
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🐦 X
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🧑‍💻 GitHub
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🚝 测速工具
+    type: select
+    proxies: [DIRECT, 🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🎮 Steam
+    type: select
+    proxies: [DIRECT, 🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🟦 OKX
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, DIRECT, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🟨 Binance
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, DIRECT, 🌐 Default]
+
+  - name: 🟪 Bybit
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, DIRECT, 🌐 Default]
+
+  - name: 🟥 Adobe
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, DIRECT, REJECT, 🌐 Default]
+
+  - name: 🔎 Google
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: ☁️ cloudflare
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🧭 手动选择, ♻️ 自动选择, 🌐 Default]
+
+  - name: 🪟 Microsoft
+    type: select
+    proxies: [DIRECT, 🏠 住宅IP, 🏢 机房IP, ♻️ 自动选择, 🧭 手动选择, 🌐 Default]
+
+  # ---------- 3.4 Default / 漏网之鱼 / 非标端口 ----------
+  - name: 🌐 Default
+    type: select
+    proxies: [🏠 住宅IP, 🏢 机房IP, 🌍 全部节点, ♻️ 自动选择, 🧭 手动选择, DIRECT]
+
+  - name: 🐟 漏网之鱼
+    type: select
+    proxies: [🌐 Default, DIRECT, ♻️ 自动选择, 🏠 住宅IP, 🏢 机房IP, 🧭 手动选择]
+
+  - name: 🐟 遵循规则
+    type: select
+    proxies: [🐟 漏网之鱼]
+
+  - name: 🔀 非标端口
+    type: select
+    proxies: [🐟 遵循规则, DIRECT]
+
+# ==========================================================
+# 4) 分流规则（自上而下优先级，与模板顺序保持一致）
+# ==========================================================
+rules:
+  # --- Adobe ---
+  - GEOSITE,adobe,🟥 Adobe
+  - GEOIP,adobe,🟥 Adobe,no-resolve
+
+  # --- 私网直连 ---
+  - GEOSITE,private,DIRECT
+  - GEOIP,private,DIRECT,no-resolve
+
+  # --- Aethersailor 直连补丁 ---
+  - RULE-SET,aethersailor_direct_domain,DIRECT
+  - RULE-SET,aethersailor_direct_ip,DIRECT
+
+  # --- Aethersailor 代理补丁（仅兜底用）---
+  - RULE-SET,aethersailor_proxy_domain,🚀 兜底选择
+  - RULE-SET,aethersailor_proxy_ip,🚀 兜底选择
+
+  # --- 国内直连 ---
+  - GEOSITE,cn,DIRECT
+  - GEOIP,cn,DIRECT,no-resolve
+
+  # --- 国内可用 / 下载 / BT ---
+  - GEOSITE,google-cn,DIRECT
+  - GEOSITE,category-games@cn,DIRECT
+  - GEOSITE,category-game-platforms-download,DIRECT
+  - GEOSITE,category-public-tracker,DIRECT
+
+  # --- 核心应用 ---
+  - GEOSITE,Notion,📦 Notion
+  - GEOIP,Notion,📦 Notion,no-resolve
+
+  - GEOSITE,telegram,📨 Telegram
+  - GEOIP,telegram,📨 Telegram,no-resolve
+
+  - GEOSITE,openai,🤖 ChatGPT
+  - GEOSITE,category-ai-!cn,🧠 AI
+
+  - GEOSITE,apple,🍎 Apple
+  - GEOSITE,youtube,🎬 YouTube
+  - GEOSITE,netflix,🎥 Netflix
+  - GEOIP,netflix,🎥 Netflix,no-resolve
+
+  # --- 海外主流应用补充 ---
+  - GEOSITE,tiktok,🎵 TikTok
+  - GEOIP,tiktok,🎵 TikTok,no-resolve
+  - GEOSITE,instagram,📸 Instagram
+  - GEOSITE,twitter,🐦 X
+
+  # --- 开发 / 工具 ---
+  - GEOSITE,github,🧑‍💻 GitHub
+  - GEOIP,github,🧑‍💻 GitHub,no-resolve
+  - GEOSITE,category-speedtest,🚝 测速工具
+  - GEOSITE,steam,🎮 Steam
+
+  # --- 交易所 ---
+  - GEOSITE,okx,🟦 OKX
+  - GEOSITE,binance,🟨 Binance
+  - GEOSITE,bybit,🟪 Bybit
+
+  # --- 社交 / 通讯 ---
+  - GEOSITE,category-communication,📞 即时通讯
+  - GEOSITE,category-social-media-!cn,💬 社交媒体
+
+  # --- Google / Cloudflare / Microsoft ---
+  - GEOSITE,cloudflare,☁️ cloudflare
+  - GEOIP,cloudflare,☁️ cloudflare,no-resolve
+
+  - GEOSITE,google,🔎 Google
+  - GEOIP,google,🔎 Google,no-resolve
+
+  - GEOSITE,microsoft,🪟 Microsoft
+  - GEOIP,microsoft,🪟 Microsoft,no-resolve
+
+  # --- GFW 兜底 ---
+  - GEOSITE,gfw,🚀 兜底选择
+
+  # --- 非标端口 ---
+  - RULE-SET,aethersailor_port_direct,🔀 非标端口
+
+  # --- 最终兜底 ---
+  - MATCH,🐟 漏网之鱼
